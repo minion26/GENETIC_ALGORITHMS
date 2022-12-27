@@ -4,19 +4,11 @@ import random
 import math
 import timeit
 import sys
+start_time = time.time()
+f=open("output2.txt", "a")
 
-population_size = 5 #chromosomes
-numberGenerations = 1
-kIndividuals = 10 
-precision = 5
-eps = pow(10, -5)
-Dimension=5 # how many params has the function: 5, 10, 30
-a = -5.12
-b = 5.12
-no_numbers = (b - a)*pow(10,5) #no of subintervals
-ld = math.ceil(math.log2(no_numbers)) #len of the bitstring of one param
-N = ld * Dimension #how many bits will have the list witch has all the params for the function, 5/10/30
-
+population_size = 200 #chromosomes
+numberGenerations = 1000
 
 #-----------FUNCTIONS---------------
 def rastrigin(array) :
@@ -38,26 +30,40 @@ def schwefel(array):
     return sum
 
 def michalewicz(array):
-    sum(math.sin(i)* math.pow(math.sin((j*i**2)/math.pi),2*len(array)) for j,i in enumerate(array))
+    return sum(math.sin(i)* math.pow(math.sin((j*i**2)/math.pi),2*len(array)) for j,i in enumerate(array))
 
 #--------------fitness function---------------------------
 def fitnessDejong(arr) -> float:
-    sum = 0.0
+    sum = 0.000000000000000000000001
     for i in range(0, len(arr)):
         sum = sum + arr[i]*arr[i]
     return 1/sum
 
 def fitnessRastrigin(arr):
-    pass
+    sum = 0.00000000000000000001
+    sum = sum + rastrigin(arr)
+    return 1/sum
 
 def fitnessSchwefel(arr):
-    pass
+    sum = 0.00000000000000000001
+    sum = sum + schwefel(arr)
+    return 1/sum
+    
 
 def fitnessMichalewicz(arr):
-    pass
+    sum = 0.00000000000000000001
+    sum = sum + michalewicz(arr)
+    return 1/sum
 
+
+def XOR(x:float, y:float):
+    if x == y :
+        return 0.0
+    else:
+        return 1.0
+    
 #----------returns the solution in decimal in [a,b]---------
-def decode(solution, a, b, ld)->int:
+def decode(solution:list, a, b, ld)->int:
     res = binaryToDecimal(solution)
     res = res / (pow(2, ld)-1)
     res = res * (b-a)
@@ -66,10 +72,19 @@ def decode(solution, a, b, ld)->int:
 
 #-------------transforms from bitstring to decimal----------
 def binaryToDecimal(array_given)->int:
+    gray = []
+    gray.append(array_given[0])
+    for i in range(1, len(array_given)):
+        if array_given[i] == 0.0:
+            gray.append(gray[i-1])
+        else:
+            gray.append(1.0 - gray[i-1])
+    
     sum = 0
-    for idx, val in enumerate(reversed(array_given)):
+    for idx, val in enumerate(reversed(gray)):
         sum = sum + val * (2**idx)
     return sum
+
 
 #-----------generate random the first generation----------
 
@@ -84,30 +99,19 @@ def firstGeneration(N)->list:
 
     return generation_current
 
-#------decodes the bitstring to decimal to see if they are in [a,b]--------
-# chr = []
-# chr = firstGeneration(N)
-# for i in range(0,N, ld):
-#     print(decode((chr[i:i+ld], a,b,ld)))
-
 #-------------mutation -> it changes one bit in one place with some probability----------
-def mutation(population:list,ld:int):
+def mutation(population:list, ld:int, mutationChance):
+    gene = random.randint(0,ld-1)
     probability = random.random()
-    if probability < 0.1 :
-        randomGena = random.randint(0,ld-1)
-        if population[randomGena] == 1:
-            population[randomGena] = 0
+    if probability <= mutationChance :
+        if population[gene] == 1:
+            population[gene] = 0
         else:
-            population[randomGena] = 1
+            population[gene] = 1
 
     return population
 
-#------------testing the mutation function------------
-# chr = firstGeneration(N)
-# pop = chr[1:1+ld]
-# print(pop)
-# print(mutation(pop, ld))
-
+#----------------------cross over--------------------------
 def cross_over(parent1:list, parent2:list, ld:int):
     cuttingPoint = random.randint(0,ld-1)
 
@@ -121,16 +125,18 @@ def cross_over(parent1:list, parent2:list, ld:int):
     desc2 = same2+changeToParent2
     return(desc1, desc2)
 
-#------------testing the cross_over function------------
-# chr = firstGeneration(N)
-# parent1 = chr[0:ld]
-# parent2 = chr[ld:2*ld]
-# print(cross_over(parent1, parent2, ld))
+#---------------creating a list with probability for cross over
+def chromCrossOver():
+    Rate = []
+    for k in range(0, population_size):
+        rate = random.random()
+        Rate.append(rate)
+    
+    return Rate
 
-def ga(start, stop, function_name, fitness_name, D, ld, N):
 
-#-------first generation---------
-    firstGen = firstGeneration(N)
+def selection(start, stop, function_name, fitness_name, D, ld, N, firstGen):
+
 #-------there are D chromosomes, D = dimensions of function-------
     fitnessValues = [] #values of fitness function with every chromosomes
     functionValues = [] #values of function in these chromosomes
@@ -148,45 +154,181 @@ def ga(start, stop, function_name, fitness_name, D, ld, N):
         #------------decode the bitstring for the fitness and the main function---------------
         for j in range(0,N,ld):
             listofallparam.append((decode(firstGen[i][j:j+ld],start,stop,ld)))
+
         #------------list of chromosomes-----------------------------------------------------
         for k in range(0,population_size,D):
             PARAMS.append(listofallparam[k:k+D])
+
         #------------a list with all the fitness result with all the chromosomes--------------
         fitnessValues.append(fitness_name(PARAMS[i]))
+
         #------------sum for all to help us with the probability------------------------------
         sumOfAllFitness = sumOfAllFitness + fitness_name(PARAMS[i])
+
         #------------a list with all the function result with all the chromosomes------------
         functionValues.append(function_name(PARAMS[i]))
+
+
     #---------------probability to choose the chromosome-------------------------------------
     for i in range(0,population_size):
         probabilities.append(fitness_name(PARAMS[i])/sumOfAllFitness)
+
     #---------------creating the cumulative--------------------------------------------------
     cumulative.append(probabilities[0])
     for i in range(1,population_size):
-        cumulative.append(cumulative[i-1]+probabilities[i])
+        cumulative.append(cumulative[i-1]+probabilities[i-1])
+
     #---------------the selected chromosomes for the next steps------------------------------
     for i in range(0,population_size):
         randomProb.append(random.random())
-        for j in range(0, population_size):
-            if cumulative[j]>randomProb[i]:
+        for j in range(0, population_size-1):
+            if (cumulative[j] < randomProb[i] and randomProb[i] <= cumulative[j+1]) or (randomProb[i] < cumulative[j]):
                 descendents.append(firstGen[i])
                 break
+
+            
+    if len(descendents) < population_size: 
+        for j in range(len(descendents), population_size):
+            descendents.append(firstGen[j])
             
 
-    # print(descendents)
-    # print(fitnessValues)
-    # print(sumOfAllFitness)
-    # print(probabilities)
-    # print(functionValues)
-    # print(sum)
-    # print(cumulative)
-    # print(randomProb)
-    
+    return descendents
 
 
 
-
-
-
+def ga(start, stop, N, ld, Dimension, function_name, fitness_name, crossoverRate, mutationChance, MINIM):
+    firstGen = firstGeneration(N)
+    # print(len(firstGen))
+    for i in range(0, numberGenerations):
+        offSpring = selection(start, stop, function_name, fitness_name, Dimension, ld, N, firstGen)
+        # print(offSpring,end='\n')
+        for chrom in offSpring:
+            for j in range(0, N, ld):
+                # print(len(offSpring[i][j:j+ld]))
+                param = chrom[j:j+ld]
+                #mutation(offSpring[i][j:j+ld], ld)
+                mutation(param, ld, mutationChance)
+                # print("a mers mutatia")
+            
         
-ga(a,b,dejong, fitnessDejong, Dimension, ld, N)
+        # print(len(offSpring))
+        rate = chromCrossOver()
+        
+        for indx,chromo in enumerate(offSpring):
+            if indx != len(offSpring)-1:
+                
+                for j in range(0, N, ld*2):
+                    if rate[indx+1] < crossoverRate:
+                        param1 = chromo[j:j+ld]
+                        param2 = chromo[j+ld:j+2*ld]
+                        cross_over(param1,param2,ld)
+                        # print("a mers cross_over")
+                            # print(ld)
+                            # return(offSpring[i][j:j+ld])
+                    else:
+                        randomVal = random.random()
+                        if randomVal == 1:
+                            # print("a mers cross_over 2")
+                            param1 = chromo[j:j+ld]
+                            param2 = chromo[j+ld:j+2*ld]
+                            cross_over(param1,param2,ld)
+                            # cross_over(offSpring[i][j:j+ld], offSpring[i+1][j+1:j+1+ld], ld)
+        # firstGen = offSpring
+                            
+        #--------------modifiyng the mutation chance----------------
+        mutationChance = mutationChance * 0.99
+        if mutationChance < 0.01 :
+            mutationChance = 0.01
+
+        #--------------modifiyng the cross over rate-----------------
+        crossoverRate = crossoverRate * 1.01
+        if crossoverRate > 2.0 :
+            crossoverRate = 2.0    
+   
+    min=0
+    minj = 0
+    for i in range(0, population_size):
+        for j in range(0, N, ld):
+            # print( offSpring[i][j:j+ld])
+            # print(offSpring[min][j:j+ld])
+            # print("j")
+            # print(decode(offSpring[i][j:j+ld], start, stop, ld))
+            # print("min")
+            # print(decode(offSpring[min][j:j+ld], start, stop, ld))
+            actualVal = decode(offSpring[i][j:j+ld], start, stop, ld)
+            minVal = decode(offSpring[min][minj:minj+ld], start, stop, ld)
+            if actualVal < MINIM:
+                if actualVal > minVal:
+                    min = i
+                    minj = j
+            else:
+                if actualVal < minVal:
+                    min = i
+                    minj = j
+            print(actualVal, minVal, len(offSpring), function_name(offSpring[min][minj:minj+ld]), mutationChance, crossoverRate) 
+
+    
+    f.write(f'Function: {function_name} \n minimum value: {function_name(offSpring[min][minj:minj+ld]), minVal} \n numberOfGeneration: {numberGenerations} \n populationSize: {population_size} \n dimension: {Dimension} \n time: {(time.time() - start_time)} seconds')
+    f.write(f'\n')
+    f.write(f'\n')
+    return minVal
+    # return 0
+
+
+# --------------------------------------------------------------------
+start_Rastrigin=-5.12
+stop_Rastrigin=5.12 
+# D = 5
+eps = pow(10, -5)
+no_numbers = (stop_Rastrigin - start_Rastrigin)*pow(10,5)
+ld = math.ceil(math.log2(no_numbers))
+# N = ld * D
+for k in range(0,1):
+    print(k) 
+    print(ga(start_Rastrigin, stop_Rastrigin, ld*5, ld, 5, rastrigin, fitnessRastrigin, 0.1,0.7, 0))
+    print(ga(start_Rastrigin, stop_Rastrigin, ld*10, ld, 10, rastrigin, fitnessRastrigin, 0.1,0.7, 0))
+    print(ga(start_Rastrigin, stop_Rastrigin, ld*30, ld, 30, rastrigin, fitnessRastrigin, 0.1,0.7, 0))
+
+
+start_DeJong=-5.12
+stop_DeJong=5.12
+# D=5
+eps = pow(10, -5)
+no_numbers = (stop_DeJong - start_DeJong)*pow(10,5)
+ld = math.ceil(math.log2(no_numbers))
+# N = ld * D 
+
+for k in range(0,1):
+    print(k)
+    print(ga(start_DeJong, stop_DeJong, ld*5, ld, 5, dejong, fitnessDejong, 0.1, 0.7, 0))
+    print(ga(start_DeJong, stop_DeJong, ld*10, ld, 10, dejong, fitnessDejong, 0.1,0.7, 0))
+    print(ga(start_DeJong, stop_DeJong, ld*30, ld, 30, dejong, fitnessDejong, 0.1,0.7, 0))
+
+
+start_Michalewicz=0
+stop_Michalewicz=math.pi
+# D=5
+eps = pow(10, -5)
+no_numbers = (stop_Michalewicz - start_Michalewicz)*pow(10,5)
+ld = math.ceil(math.log2(no_numbers))
+# N = ld * D 
+for k in range(0,1):
+    print(k)
+    print(ga(start_Michalewicz, stop_Michalewicz, ld*5, ld, 5, michalewicz, fitnessMichalewicz, 0.1,0.7, -4.687))
+    print(ga(start_Michalewicz, stop_Michalewicz, ld*10, ld, 10, michalewicz, fitnessMichalewicz, 0.1,0.7, -9.66))
+    print(ga(start_Michalewicz, stop_Michalewicz, ld*30, ld, 30, michalewicz, fitnessMichalewicz, 0.1,0.7, -9.66))
+
+
+start_Schwefel=-500
+stop_Schwefel=500
+# D=5
+eps = pow(10, -5)
+no_numbers = (stop_Schwefel - start_Schwefel)*pow(10,5)
+ld = math.ceil(math.log2(no_numbers))
+# N = ld * D 
+for k in range(0,1):
+    print(k)
+    print(ga(start_Schwefel, stop_Schwefel, ld*5, ld, 5, schwefel, fitnessSchwefel, 0.1,0.7, -2094.9145))
+    print(ga(start_Schwefel, stop_Schwefel, ld*10, ld, 10, schwefel, fitnessSchwefel, 0.1,0.7, -4189.829))
+    print(ga(start_Schwefel, stop_Schwefel, ld*30, ld, 30, schwefel, fitnessSchwefel, 0.1,0.7, -12569.497))
+
